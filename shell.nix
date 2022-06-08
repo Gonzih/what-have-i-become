@@ -10,7 +10,7 @@ mkShell {
     udev
     alsaLib
     vulkan-loader
-    x11
+    xlibsWrapper
     xorg.libXcursor
     xorg.libXrandr
     xorg.libXi # To use x11 feature
