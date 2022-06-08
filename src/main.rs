@@ -112,10 +112,13 @@ fn card_hover(
                 let pointer_y = world_pos.y;
 
                 if BoundingBox::new(transform.translation, size).point_in(world_pos) {
-                    transform.translation.x -= 0.1;
-                    transform.translation.y -= 0.1;
+                    transform.scale.x = 1.3;
+                    transform.scale.y = 1.3;
                     eprintln!("World coords: {}/{}", world_pos.x, world_pos.y);
                     eprintln!("Transform {:?}", transform);
+                } else {
+                    transform.scale.x = 1.;
+                    transform.scale.y = 1.;
                 }
             }
         }

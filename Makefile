@@ -1,5 +1,5 @@
 run:
-	cargo run
+	cargo run --features bevy/dynamic
 
 run-nix:
 	nix-shell shell.nix --run '$(MAKE) run'
