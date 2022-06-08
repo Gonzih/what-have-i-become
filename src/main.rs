@@ -157,27 +157,28 @@ fn card_click(
     mut q_hand: Query<&mut Hand>,
     mut query: Query<(Entity, &mut Transform, &Sprite), With<Card>>,
 ) {
-    let (camera, camera_transform) = q_camera.single();
+    if mouse_input.just_pressed(MouseButton::Left) {
+        let (camera, camera_transform) = q_camera.single();
 
-    let wnd = windows.get_primary().unwrap();
+        let wnd = windows.get_primary().unwrap();
 
-    if let Some(screen_pos) = wnd.cursor_position() {
-        let window_size = Vec2::new(wnd.width() as f32, wnd.height() as f32);
-        let ndc = (screen_pos / window_size) * 2.0 - Vec2::ONE;
-        let ndc_to_world = camera_transform.compute_matrix() * camera.projection_matrix.inverse();
-        let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
-        let world_pos: Vec2 = world_pos.truncate();
+        if let Some(screen_pos) = wnd.cursor_position() {
+            let window_size = Vec2::new(wnd.width() as f32, wnd.height() as f32);
+            let ndc = (screen_pos / window_size) * 2.0 - Vec2::ONE;
+            let ndc_to_world =
+                camera_transform.compute_matrix() * camera.projection_matrix.inverse();
+            let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
+            let world_pos: Vec2 = world_pos.truncate();
 
-        for mut hand in q_hand.iter_mut() {
-            for (entity, mut transform, sprite) in query.iter_mut() {
-                if let Some(size) = sprite.custom_size {
-                    if mouse_input.just_pressed(MouseButton::Left)
-                        && BoundingBox::new(transform.translation, size).point_in(world_pos)
-                    {
-                        commands.entity(entity).despawn_recursive();
-                        let pos = hand.cards.iter().position(|e| e == &entity);
-                        if let Some(i) = pos {
-                            hand.cards.remove(i);
+            for mut hand in q_hand.iter_mut() {
+                for (entity, mut transform, sprite) in query.iter_mut() {
+                    if let Some(size) = sprite.custom_size {
+                        if BoundingBox::new(transform.translation, size).point_in(world_pos) {
+                            commands.entity(entity).despawn_recursive();
+                            let pos = hand.cards.iter().position(|e| e == &entity);
+                            if let Some(i) = pos {
+                                hand.cards.remove(i);
+                            }
                         }
                     }
                 }
