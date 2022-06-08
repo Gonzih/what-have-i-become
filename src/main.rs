@@ -10,17 +10,33 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_event::<WindowResized>()
-        .add_event::<ClickEvent>()
+        .init_resource::<WorldMousePosition>()
         .add_startup_system(setup)
-        .add_system(click_events_writer)
-        .add_system(card_hover)
+        .add_system(world_mouse_position_writer)
         .add_system(card_position)
         .add_system(card_click)
+        .add_system(card_hoverable)
+        .add_system(card_hovered)
         .add_system(resize_notificator)
         .run();
 }
 
-struct ClickEvent(Vec2);
+struct WorldMousePosition(Vec2);
+
+impl Default for WorldMousePosition {
+    fn default() -> Self {
+        WorldMousePosition(Vec2::new(0., 0.))
+    }
+}
+
+#[derive(Component)]
+struct Hoverable(bool);
+
+impl Hoverable {
+    fn new() -> Self {
+        Self(false)
+    }
+}
 
 #[derive(Component)]
 struct MainCamera;
@@ -66,6 +82,7 @@ impl Hand {
                 ..default()
             })
             .insert(Card::new())
+            .insert(Hoverable::new())
             .id();
 
         // commands.entity(self.entity).push_children(&[card]);
@@ -105,47 +122,47 @@ fn resize_notificator(mut events: EventReader<WindowResized>) {
     }
 }
 
-fn card_hover(
-    windows: Res<Windows>,
-    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    mut query: Query<(&mut Transform, &Sprite), With<Card>>,
-) {
-    let (camera, camera_transform) = q_camera.single();
-
-    let wnd = windows.get_primary().unwrap();
-
-    if let Some(screen_pos) = wnd.cursor_position() {
-        let window_size = Vec2::new(wnd.width() as f32, wnd.height() as f32);
-        let ndc = (screen_pos / window_size) * 2.0 - Vec2::ONE;
-        let ndc_to_world = camera_transform.compute_matrix() * camera.projection_matrix.inverse();
-        let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
-        let world_pos: Vec2 = world_pos.truncate();
-
-        for (mut transform, sprite) in query.iter_mut() {
-            if let Some(size) = sprite.custom_size {
-                if BoundingBox::new(transform.translation, size).point_in(world_pos) {
-                    transform.scale.x = 1.3;
-                    transform.scale.y = 1.3;
-                } else {
-                    transform.scale.x = 1.;
-                    transform.scale.y = 1.;
-                }
-            }
+fn card_hovered(mut query: Query<(&mut Transform, &Hoverable), With<Card>>) {
+    for (mut transform, hoverable) in query.iter_mut() {
+        if hoverable.0 {
+            transform.scale.x = 1.1;
+            transform.scale.y = 1.1;
+        } else {
+            transform.scale.x = 1.;
+            transform.scale.y = 1.;
         }
     }
 }
 
-fn card_position(q_hand: Query<&Hand>, mut query: Query<(Entity, &mut Transform), With<Card>>) {
+fn card_hoverable(
+    world_pos: Res<WorldMousePosition>,
+    mut query: Query<(&mut Transform, &Sprite, &mut Hoverable), With<Card>>,
+) {
+    for (mut transform, sprite, mut hoverable) in query.iter_mut() {
+        if let Some(size) = sprite.custom_size {
+            hoverable.0 = BoundingBox::new(transform.translation, size).point_in(world_pos.0);
+        }
+    }
+}
+
+fn card_position(
+    q_hand: Query<&Hand>,
+    mut query: Query<(Entity, &mut Transform, &Hoverable), With<Card>>,
+) {
     for hand in q_hand.iter() {
         let cnt = hand.cards.len() as f32;
 
-        for (entity, mut transform) in query.iter_mut() {
+        for (entity, mut transform, hoverable) in query.iter_mut() {
             let pos = hand.cards.iter().position(|e| e == &entity);
             if let Some(i) = pos {
                 let i = i as f32;
                 let i = (i - (cnt / 2.));
                 let x: f32 = i * 110.;
-                let y: f32 = i.abs() * -30.0;
+                let mut y: f32 = i.abs() * -30.0;
+
+                if hoverable.0 {
+                    y += 10.;
+                }
 
                 transform.translation.x = x;
                 transform.translation.y = y;
@@ -156,18 +173,19 @@ fn card_position(q_hand: Query<&Hand>, mut query: Query<(Entity, &mut Transform)
 
 fn card_click(
     mut commands: Commands,
-    mut events: EventReader<ClickEvent>,
+    world_pos: Res<WorldMousePosition>,
+    mouse_input: Res<Input<MouseButton>>,
     mut q_hand: Query<&mut Hand>,
     mut query: Query<(Entity, &mut Transform, &Sprite), With<Card>>,
 ) {
-    for event in events.iter() {
-        let world_pos: Vec2 = event.0;
-
+    if mouse_input.just_pressed(MouseButton::Left) {
         for mut hand in q_hand.iter_mut() {
             for (entity, mut transform, sprite) in query.iter_mut() {
                 if let Some(size) = sprite.custom_size {
-                    if BoundingBox::new(transform.translation, size).point_in(world_pos) {
+                    if BoundingBox::new(transform.translation, size).point_in(world_pos.0) {
+                        println!("Removing card {:?}", entity);
                         commands.entity(entity).despawn_recursive();
+
                         let pos = hand.cards.iter().position(|e| e == &entity);
                         if let Some(i) = pos {
                             hand.cards.remove(i);
@@ -179,26 +197,23 @@ fn card_click(
     }
 }
 
-fn click_events_writer(
-    mouse_input: Res<Input<MouseButton>>,
+fn world_mouse_position_writer(
     windows: Res<Windows>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    mut events: EventWriter<ClickEvent>,
+    mut world_pos: ResMut<WorldMousePosition>,
 ) {
-    if mouse_input.just_pressed(MouseButton::Left) {
-        let (camera, camera_transform) = q_camera.single();
+    let (camera, camera_transform) = q_camera.single();
 
-        if let Some(wnd) = windows.get_primary() {
-            if let Some(screen_pos) = wnd.cursor_position() {
-                let window_size = Vec2::new(wnd.width() as f32, wnd.height() as f32);
-                let ndc = (screen_pos / window_size) * 2.0 - Vec2::ONE;
-                let ndc_to_world =
-                    camera_transform.compute_matrix() * camera.projection_matrix.inverse();
-                let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
-                let world_pos: Vec2 = world_pos.truncate();
+    if let Some(wnd) = windows.get_primary() {
+        if let Some(screen_pos) = wnd.cursor_position() {
+            let window_size = Vec2::new(wnd.width() as f32, wnd.height() as f32);
+            let ndc = (screen_pos / window_size) * 2.0 - Vec2::ONE;
+            let ndc_to_world =
+                camera_transform.compute_matrix() * camera.projection_matrix.inverse();
+            let w_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
+            let w_pos: Vec2 = w_pos.truncate();
 
-                events.send(ClickEvent(world_pos));
-            }
+            world_pos.0 = w_pos;
         }
     }
 }
