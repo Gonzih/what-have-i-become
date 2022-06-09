@@ -4,6 +4,12 @@ use bevy::window::WindowResized;
 mod bounding_box;
 use bounding_box::*;
 
+#[derive(SystemLabel, Debug, Eq, PartialEq, Hash, Clone)]
+enum SystemLabels {
+    CardClick,
+    CardDrag,
+}
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -12,8 +18,12 @@ fn main() {
         .add_startup_system(setup)
         .add_system(world_mouse_position_writer)
         .add_system(card_position)
-        .add_system(card_click)
-        .add_system(card_drag)
+        .add_system(card_click.label(SystemLabels::CardClick))
+        .add_system(
+            card_drag
+                .label(SystemLabels::CardDrag)
+                .after(SystemLabels::CardClick),
+        )
         .add_system(card_hoverable)
         .add_system(card_hovered)
         .add_system(resize_notificator)
@@ -156,25 +166,27 @@ fn card_hoverable(
 
 fn card_position(
     q_hand: Query<&Hand>,
-    mut query: Query<(Entity, &mut Transform, &Hoverable), With<Card>>,
+    mut query: Query<(Entity, &mut Transform, &Hoverable, &Draggable), With<Card>>,
 ) {
     for hand in q_hand.iter() {
         let cnt = hand.cards.len() as f32;
 
-        for (entity, mut transform, hoverable) in query.iter_mut() {
-            let pos = hand.cards.iter().position(|e| e == &entity);
-            if let Some(i) = pos {
-                let i = i as f32;
-                let i = i - (cnt / 2.);
-                let x: f32 = i * 110.;
-                let mut y: f32 = i.abs() * -30.0;
+        for (entity, mut transform, hoverable, draggable) in query.iter_mut() {
+            if draggable.0.is_none() {
+                let pos = hand.cards.iter().position(|e| e == &entity);
+                if let Some(i) = pos {
+                    let i = i as f32;
+                    let i = i - (cnt / 2.);
+                    let x: f32 = i * 110.;
+                    let mut y: f32 = i.abs() * -30.0;
 
-                if hoverable.0 {
-                    y += 10.;
+                    if hoverable.0 {
+                        y += 10.;
+                    }
+
+                    transform.translation.x = x;
+                    transform.translation.y = y;
                 }
-
-                transform.translation.x = x;
-                transform.translation.y = y;
             }
         }
     }
