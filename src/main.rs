@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy::text::Text2dBounds;
 use bevy::window::WindowResized;
+use rand::prelude::*;
 
 mod bounding_box;
 use bounding_box::*;
@@ -66,11 +67,15 @@ impl Hoverable {
 struct MainCamera;
 
 #[derive(Component)]
-struct Card {}
+struct Card {
+    code: String,
+}
 
 impl Card {
-    fn new() -> Self {
-        Self {}
+    fn new(c: &str) -> Self {
+        Self {
+            code: c.to_string(),
+        }
     }
 }
 
@@ -95,6 +100,11 @@ impl Hand {
         materials: &mut ResMut<Assets<StandardMaterial>>,
         asset_server: &Res<AssetServer>,
     ) {
+        let cards = vec!["x+1", "x-1"];
+        let mut rng = rand::thread_rng();
+        let card_index = rng.gen_range(0..(cards.len()));
+        let card_code = cards[card_index];
+
         let box_size = Size::new(100., 200.);
 
         let card = commands
@@ -110,7 +120,7 @@ impl Hand {
                 },
                 ..default()
             })
-            .insert(Card::new())
+            .insert(Card::new(card_code))
             .insert(Hoverable::new())
             .insert(Draggable::new())
             .id();
@@ -128,7 +138,7 @@ impl Hand {
 
         let text_bundle = commands
             .spawn_bundle(Text2dBundle {
-                text: Text::with_section("+1", text_style.clone(), text_alignment),
+                text: Text::with_section(card_code, text_style.clone(), text_alignment),
                 transform: Transform {
                     translation: Vec3::new(0., -50., 3.),
                     ..default()
@@ -203,7 +213,7 @@ fn spawn_targets(
 
 fn resize_notificator(mut events: EventReader<WindowResized>) {
     for e in events.iter() {
-        println!("width = {} height = {}", e.width, e.height);
+        info!("width = {} height = {}", e.width, e.height);
     }
 }
 
@@ -274,7 +284,7 @@ fn card_drag(
 ) {
     for (entity, mut transform, draggable) in query.iter_mut() {
         if let Some(offset) = draggable.0 {
-            println!("Moving card {:?}", entity);
+            info!("Moving card {:?}", entity);
             transform.translation.x = world_pos.0.x + offset.x;
             transform.translation.y = world_pos.0.y + offset.y;
             transform.translation.z = 10.;
@@ -296,7 +306,7 @@ fn card_click(
                     let ox = transform.translation.x - world_pos.0.x;
                     let oy = transform.translation.y - world_pos.0.y;
                     let offset = Vec2::new(ox, oy);
-                    println!("Setting {:?} as draggable with offset {:?}", entity, offset);
+                    info!("Setting {:?} as draggable with offset {:?}", entity, offset);
                     draggable.0 = Some(offset);
                 }
             }
@@ -310,17 +320,17 @@ fn card_click_release(
     mouse_input: Res<Input<MouseButton>>,
     mut q_hand: Query<&mut Hand>,
     mut q_target: Query<(&mut Target, &mut Text)>,
-    mut query: Query<(Entity, &mut Transform, &Sprite, &mut Draggable), With<Card>>,
+    mut query: Query<(Entity, &mut Transform, &Sprite, &mut Draggable, &Card)>,
 ) {
     if mouse_input.just_released(MouseButton::Left) {
         let mut hand = q_hand.single_mut();
 
-        println!("Unsetting draggable on all");
+        info!("Unsetting draggable on all");
 
-        for (entity, _, _, mut draggable) in query.iter_mut() {
+        for (entity, _, _, mut draggable, card) in query.iter_mut() {
             if draggable.0.is_some() {
                 draggable.0 = None;
-                println!("Removing card {:?}", entity);
+                info!("Removing card {:?}", entity);
 
                 commands.entity(entity).despawn_recursive();
 
@@ -330,8 +340,18 @@ fn card_click_release(
                 }
 
                 for (mut target, mut text) in q_target.iter_mut() {
-                    target.0 += 1;
-                    text.sections[0].value = format!("+{}", target.0);
+                    let code = format!("(function(x) {{ return {}; }})({})", card.code, target.0);
+                    info!("Eval {}", code);
+
+                    let res = unsafe { js_sys::eval(&code) };
+                    info!("Eval {:?}", res);
+                    if let Ok(v) = res {
+                        if let Some(n) = v.as_f64() {
+                            target.0 = n as usize;
+                        }
+                    }
+
+                    text.sections[0].value = format!("{}", target.0);
                 }
             }
         }
