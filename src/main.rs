@@ -43,7 +43,7 @@ impl Default for WorldMousePosition {
 }
 
 #[derive(Component)]
-struct Target(usize);
+struct Target(i64);
 
 #[derive(Component)]
 struct Draggable(Option<Vec2>);
@@ -100,7 +100,13 @@ impl Hand {
         materials: &mut ResMut<Assets<StandardMaterial>>,
         asset_server: &Res<AssetServer>,
     ) {
-        let cards = vec!["x+1", "x-1"];
+        let cards = vec![
+            "x+1",
+            "x-1",
+            "Math.sqrt(x+10)",
+            "Math.abs(x)",
+            "Math.log(x)",
+        ];
         let mut rng = rand::thread_rng();
         let card_index = rng.gen_range(0..(cards.len()));
         let card_code = cards[card_index];
@@ -347,7 +353,7 @@ fn card_click_release(
                     info!("Eval {:?}", res);
                     if let Ok(v) = res {
                         if let Some(n) = v.as_f64() {
-                            target.0 = n as usize;
+                            target.0 = n.round() as i64;
                         }
                     }
 
