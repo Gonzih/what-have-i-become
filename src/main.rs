@@ -186,11 +186,20 @@ fn card_hovered(mut query: Query<(&mut Transform, &Hoverable), With<Card>>) {
 
 fn card_hoverable(
     world_pos: Res<WorldMousePosition>,
-    mut query: Query<(&mut Transform, &Sprite, &mut Hoverable), With<Card>>,
+    mut query: Query<(Entity, &mut Transform, &Sprite, &mut Hoverable), With<Card>>,
 ) {
-    for (mut transform, sprite, mut hoverable) in query.iter_mut() {
+    let hovered_entity = query
+        .iter()
+        .find(|(_, _, _, hoverable)| hoverable.0)
+        .map(|(entity, _, _, _)| entity);
+
+    for (entity, mut transform, sprite, mut hoverable) in query.iter_mut() {
         if let Some(size) = sprite.custom_size {
-            hoverable.0 = BoundingBox::new(transform.translation, size).point_in(world_pos.0);
+            let is_hovered = BoundingBox::new(transform.translation, size).point_in(world_pos.0);
+            let is_this_hovered = Some(entity) == hovered_entity;
+
+            hoverable.0 =
+                (is_hovered && hovered_entity.is_none()) || (is_hovered && is_this_hovered);
         }
     }
 }
