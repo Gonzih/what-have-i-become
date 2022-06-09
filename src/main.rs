@@ -1,6 +1,4 @@
 use bevy::prelude::*;
-use bevy::render::render_phase::EntityPhaseItem;
-use bevy::sprite::MaterialMesh2dBundle;
 use bevy::window::WindowResized;
 
 mod bounding_box;
@@ -15,6 +13,7 @@ fn main() {
         .add_system(world_mouse_position_writer)
         .add_system(card_position)
         .add_system(card_click)
+        .add_system(card_drag)
         .add_system(card_hoverable)
         .add_system(card_hovered)
         .add_system(resize_notificator)
@@ -26,6 +25,15 @@ struct WorldMousePosition(Vec2);
 impl Default for WorldMousePosition {
     fn default() -> Self {
         WorldMousePosition(Vec2::new(0., 0.))
+    }
+}
+
+#[derive(Component)]
+struct Draggable(Option<Vec2>);
+
+impl Draggable {
+    fn new() -> Self {
+        Self(None)
     }
 }
 
@@ -83,6 +91,7 @@ impl Hand {
             })
             .insert(Card::new())
             .insert(Hoverable::new())
+            .insert(Draggable::new())
             .id();
 
         // commands.entity(self.entity).push_children(&[card]);
@@ -156,7 +165,7 @@ fn card_position(
             let pos = hand.cards.iter().position(|e| e == &entity);
             if let Some(i) = pos {
                 let i = i as f32;
-                let i = (i - (cnt / 2.));
+                let i = i - (cnt / 2.);
                 let x: f32 = i * 110.;
                 let mut y: f32 = i.abs() * -30.0;
 
@@ -171,26 +180,54 @@ fn card_position(
     }
 }
 
+fn card_drag(
+    mut commands: Commands,
+    world_pos: Res<WorldMousePosition>,
+    mut query: Query<(Entity, &mut Transform, &Draggable), With<Card>>,
+) {
+    for (entity, mut transform, draggable) in query.iter_mut() {
+        if let Some(offset) = draggable.0 {
+            println!("Moving card {:?}", entity);
+            transform.translation.x = world_pos.0.x + offset.x;
+            transform.translation.y = world_pos.0.y + offset.y;
+        }
+    }
+}
+
 fn card_click(
     mut commands: Commands,
     world_pos: Res<WorldMousePosition>,
     mouse_input: Res<Input<MouseButton>>,
     mut q_hand: Query<&mut Hand>,
-    mut query: Query<(Entity, &mut Transform, &Sprite), With<Card>>,
+    mut query: Query<(Entity, &mut Transform, &Sprite, &mut Draggable), With<Card>>,
 ) {
     if mouse_input.just_pressed(MouseButton::Left) {
-        for mut hand in q_hand.iter_mut() {
-            for (entity, mut transform, sprite) in query.iter_mut() {
-                if let Some(size) = sprite.custom_size {
-                    if BoundingBox::new(transform.translation, size).point_in(world_pos.0) {
-                        println!("Removing card {:?}", entity);
-                        commands.entity(entity).despawn_recursive();
+        for (entity, mut transform, sprite, mut draggable) in query.iter_mut() {
+            if let Some(size) = sprite.custom_size {
+                if BoundingBox::new(transform.translation, size).point_in(world_pos.0) {
+                    let ox = transform.translation.x - world_pos.0.x;
+                    let oy = transform.translation.y - world_pos.0.y;
+                    let offset = Vec2::new(ox, oy);
+                    println!("Setting {:?} as draggable with offset {:?}", entity, offset);
+                    draggable.0 = Some(offset);
+                }
+            }
+        }
+    } else if mouse_input.just_released(MouseButton::Left) {
+        let mut hand = q_hand.single_mut();
 
-                        let pos = hand.cards.iter().position(|e| e == &entity);
-                        if let Some(i) = pos {
-                            hand.cards.remove(i);
-                        }
-                    }
+        println!("Unsetting draggable on all");
+
+        for (entity, _, _, mut draggable) in query.iter_mut() {
+            if draggable.0.is_some() {
+                draggable.0 = None;
+                println!("Removing card {:?}", entity);
+
+                commands.entity(entity).despawn_recursive();
+
+                let pos = hand.cards.iter().position(|e| e == &entity);
+                if let Some(i) = pos {
+                    hand.cards.remove(i);
                 }
             }
         }
