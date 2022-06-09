@@ -40,6 +40,9 @@ impl Default for WorldMousePosition {
 }
 
 #[derive(Component)]
+struct Target(usize);
+
+#[derive(Component)]
 struct Draggable(Option<Vec2>);
 
 impl Draggable {
@@ -125,7 +128,7 @@ impl Hand {
             .spawn_bundle(Text2dBundle {
                 text: Text::with_section("+1", text_style.clone(), text_alignment),
                 transform: Transform {
-                    translation: Vec3::new(0., 50., 3.),
+                    translation: Vec3::new(0., -50., 3.),
                     ..default()
                 },
                 text_2d_bounds: Text2dBounds { size: box_size },
