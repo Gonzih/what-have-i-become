@@ -17,9 +17,11 @@ fn main() {
         .add_event::<WindowResized>()
         .init_resource::<WorldMousePosition>()
         .add_startup_system(setup)
+        .add_startup_system(spawn_targets)
         .add_system(world_mouse_position_writer)
         .add_system(card_position)
         .add_system(card_click.label(SystemLabels::CardClick))
+        .add_system(card_click_release)
         .add_system(
             card_drag
                 .label(SystemLabels::CardDrag)
@@ -169,6 +171,36 @@ fn setup(
     commands.entity(hand_id).insert(hand);
 }
 
+fn spawn_targets(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
+) {
+    let font = asset_server.load("fonts/FiraSans-Bold.ttf");
+    let text_style = TextStyle {
+        font,
+        font_size: 20.0,
+        color: Color::RED,
+    };
+    let text_alignment = TextAlignment {
+        vertical: VerticalAlign::Center,
+        horizontal: HorizontalAlign::Center,
+    };
+
+    let text_bundle = commands
+        .spawn_bundle(Text2dBundle {
+            text: Text::with_section("0", text_style.clone(), text_alignment),
+            transform: Transform {
+                translation: Vec3::new(0., 250., 3.),
+                ..default()
+            },
+            ..default()
+        })
+        .insert(Target(0))
+        .id();
+}
+
 fn resize_notificator(mut events: EventReader<WindowResized>) {
     for e in events.iter() {
         println!("width = {} height = {}", e.width, e.height);
@@ -253,10 +285,8 @@ fn card_drag(
 }
 
 fn card_click(
-    mut commands: Commands,
     world_pos: Res<WorldMousePosition>,
     mouse_input: Res<Input<MouseButton>>,
-    mut q_hand: Query<&mut Hand>,
     mut query: Query<(Entity, &mut Transform, &Sprite, &mut Draggable), With<Card>>,
 ) {
     if mouse_input.just_pressed(MouseButton::Left) {
@@ -271,7 +301,18 @@ fn card_click(
                 }
             }
         }
-    } else if mouse_input.just_released(MouseButton::Left) {
+    }
+}
+
+fn card_click_release(
+    mut commands: Commands,
+    world_pos: Res<WorldMousePosition>,
+    mouse_input: Res<Input<MouseButton>>,
+    mut q_hand: Query<&mut Hand>,
+    mut q_target: Query<(&mut Target, &mut Text)>,
+    mut query: Query<(Entity, &mut Transform, &Sprite, &mut Draggable), With<Card>>,
+) {
+    if mouse_input.just_released(MouseButton::Left) {
         let mut hand = q_hand.single_mut();
 
         println!("Unsetting draggable on all");
@@ -286,6 +327,11 @@ fn card_click(
                 let pos = hand.cards.iter().position(|e| e == &entity);
                 if let Some(i) = pos {
                     hand.cards.remove(i);
+                }
+
+                for (mut target, mut text) in q_target.iter_mut() {
+                    target.0 += 1;
+                    text.sections[0].value = format!("+{}", target.0);
                 }
             }
         }
