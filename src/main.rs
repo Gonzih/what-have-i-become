@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::text::Text2dBounds;
 use bevy::window::WindowResized;
 
 mod bounding_box;
@@ -89,14 +90,19 @@ impl Hand {
         materials: &mut ResMut<Assets<StandardMaterial>>,
         asset_server: &Res<AssetServer>,
     ) {
+        let box_size = Size::new(100., 200.);
+
         let card = commands
             .spawn_bundle(SpriteBundle {
                 texture: asset_server.load("cards/layout.png"),
                 sprite: Sprite {
-                    custom_size: Some(Vec2::new(100.0, 200.0)),
+                    custom_size: Some(Vec2::new(box_size.width, box_size.height)),
                     ..default()
                 },
-                transform: Transform { ..default() },
+                transform: Transform {
+                    translation: Vec3::new(0., 0., 2.),
+                    ..default()
+                },
                 ..default()
             })
             .insert(Card::new())
@@ -104,7 +110,32 @@ impl Hand {
             .insert(Draggable::new())
             .id();
 
+        let font = asset_server.load("fonts/FiraSans-Bold.ttf");
+        let text_style = TextStyle {
+            font,
+            font_size: 20.0,
+            color: Color::RED,
+        };
+        let text_alignment = TextAlignment {
+            vertical: VerticalAlign::Center,
+            horizontal: HorizontalAlign::Center,
+        };
+
+        let text_bundle = commands
+            .spawn_bundle(Text2dBundle {
+                text: Text::with_section("+1", text_style.clone(), text_alignment),
+                transform: Transform {
+                    translation: Vec3::new(0., 50., 3.),
+                    ..default()
+                },
+                text_2d_bounds: Text2dBounds { size: box_size },
+                ..default()
+            })
+            .id();
+
+        commands.entity(card).push_children(&[text_bundle]);
         // commands.entity(self.entity).push_children(&[card]);
+
         self.cards.push(card);
     }
 }
@@ -202,6 +233,9 @@ fn card_drag(
             println!("Moving card {:?}", entity);
             transform.translation.x = world_pos.0.x + offset.x;
             transform.translation.y = world_pos.0.y + offset.y;
+            transform.translation.z = 10.;
+        } else {
+            transform.translation.z = 2.;
         }
     }
 }
