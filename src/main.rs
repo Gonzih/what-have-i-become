@@ -25,13 +25,9 @@ fn main() {
         .add_startup_system(spawn_targets)
         .add_system(world_mouse_position_writer)
         .add_system(card_position)
-        .add_system(card_click.label(SystemLabels::CardClick))
+        .add_system(card_click)
         .add_system(card_click_release)
-        .add_system(
-            card_drag
-                .label(SystemLabels::CardDrag)
-                .after(SystemLabels::CardClick),
-        )
+        .add_system(card_drag)
         .add_system(card_hoverable)
         .add_system(card_hovered)
         .add_system(resize_notificator)
