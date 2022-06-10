@@ -12,6 +12,7 @@ use runtime::JsRuntime;
 #[derive(SystemLabel, Debug, Eq, PartialEq, Hash, Clone)]
 enum SystemLabels {
     CardClick,
+    CardClickRelease,
     CardDrag,
 }
 
@@ -23,10 +24,11 @@ fn main() {
         .init_resource::<JsRuntime>()
         .add_startup_system(setup)
         .add_startup_system(spawn_targets)
+        .add_system(reset_hand.after(SystemLabels::CardClickRelease))
         .add_system(world_mouse_position_writer)
         .add_system(card_position)
         .add_system(card_click)
-        .add_system(card_click_release)
+        .add_system(card_click_release.label(SystemLabels::CardClickRelease))
         .add_system(card_drag)
         .add_system(card_hoverable)
         .add_system(card_hovered)
@@ -172,17 +174,7 @@ fn setup(
         .insert(MainCamera);
 
     let hand_id = commands.spawn().id();
-    let mut hand = Hand::new(hand_id);
-
-    hand.spawn_card(&mut commands, &mut meshes, &mut materials, &asset_server);
-    hand.spawn_card(&mut commands, &mut meshes, &mut materials, &asset_server);
-    hand.spawn_card(&mut commands, &mut meshes, &mut materials, &asset_server);
-    hand.spawn_card(&mut commands, &mut meshes, &mut materials, &asset_server);
-    hand.spawn_card(&mut commands, &mut meshes, &mut materials, &asset_server);
-    hand.spawn_card(&mut commands, &mut meshes, &mut materials, &asset_server);
-    hand.spawn_card(&mut commands, &mut meshes, &mut materials, &asset_server);
-    hand.spawn_card(&mut commands, &mut meshes, &mut materials, &asset_server);
-    hand.spawn_card(&mut commands, &mut meshes, &mut materials, &asset_server);
+    let hand = Hand::new(hand_id);
 
     commands.entity(hand_id).insert(hand);
 }
@@ -384,6 +376,22 @@ fn world_mouse_position_writer(
             let w_pos: Vec2 = w_pos.truncate();
 
             world_pos.0 = w_pos;
+        }
+    }
+}
+
+fn reset_hand(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
+    mut q_hand: Query<&mut Hand>,
+) {
+    for mut hand in q_hand.iter_mut() {
+        if hand.cards.len() == 0 {
+            for _ in 0..5 {
+                hand.spawn_card(&mut commands, &mut meshes, &mut materials, &asset_server);
+            }
         }
     }
 }
