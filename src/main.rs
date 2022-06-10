@@ -6,6 +6,9 @@ use rand::prelude::*;
 mod bounding_box;
 use bounding_box::*;
 
+mod runtime;
+use runtime::JsRuntime;
+
 #[derive(SystemLabel, Debug, Eq, PartialEq, Hash, Clone)]
 enum SystemLabels {
     CardClick,
@@ -17,6 +20,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_event::<WindowResized>()
         .init_resource::<WorldMousePosition>()
+        .init_resource::<JsRuntime>()
         .add_startup_system(setup)
         .add_startup_system(spawn_targets)
         .add_system(world_mouse_position_writer)
@@ -265,11 +269,12 @@ fn card_position(
         for (entity, mut transform, hoverable, draggable) in query.iter_mut() {
             if draggable.0.is_none() {
                 let pos = hand.cards.iter().position(|e| e == &entity);
+
                 if let Some(i) = pos {
                     let i = i as f32;
                     let i = i - (cnt / 2.);
-                    let x: f32 = i * 110.;
-                    let mut y: f32 = i.abs() * -30.0;
+                    let x: f32 = i * 90.;
+                    let mut y: f32 = i.abs() * -15.0;
 
                     if hoverable.0 {
                         y += 10.;
@@ -277,6 +282,7 @@ fn card_position(
 
                     transform.translation.x = x;
                     transform.translation.y = y;
+                    // transform.rotation = Quat::from_rotation_z(90.);
                 }
             }
         }
@@ -322,6 +328,7 @@ fn card_click(
 
 fn card_click_release(
     mut commands: Commands,
+    runtime: Res<JsRuntime>,
     world_pos: Res<WorldMousePosition>,
     mouse_input: Res<Input<MouseButton>>,
     mut q_hand: Query<&mut Hand>,
@@ -347,10 +354,10 @@ fn card_click_release(
 
                 for (mut target, mut text) in q_target.iter_mut() {
                     let code = format!("(function(x) {{ return {}; }})({})", card.code, target.0);
-                    info!("Eval {}", code);
+                    let res = runtime.eval(&code);
 
-                    let res = unsafe { js_sys::eval(&code) };
-                    info!("Eval {:?}", res);
+                    info!("Eval {} => {:?}", code, res);
+
                     if let Ok(v) = res {
                         if let Some(n) = v.as_f64() {
                             target.0 = n.round() as i64;

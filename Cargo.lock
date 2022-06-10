@@ -879,6 +879,7 @@ dependencies = [
  "bevy_mod_picking",
  "js-sys",
  "rand",
+ "wasm-bindgen",
 ]
 
 [[package]]

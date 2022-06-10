@@ -12,6 +12,7 @@ resolver = "2"
 bevy_mod_picking = "0.7"
 rand = "*"
 js-sys = "0.3"
+wasm-bindgen = "0.2"
 
 [dependencies.bevy]
 version = "0.7"
